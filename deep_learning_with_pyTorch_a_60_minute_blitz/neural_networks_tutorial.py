@@ -10,7 +10,7 @@ Now that you had a glimpse of ``autograd``, ``nn`` depends on
 An ``nn.Module`` contains layers, and a method ``forward(input)``\ that
 returns the ``output``.
 
-For example, look at this network that classfies digit images:
+For example, look at this network that classifies digit images:
 
 .. figure:: /_static/img/mnist.png
    :alt: convnet
@@ -38,41 +38,42 @@ Define the network
 Let’s define this network:
 """
 import torch
-from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        # 3 input image channels, 6 output channels, 5x5 square convolution
-        # kernel
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        # an affine operation: y = Wx + b
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
+  def __init__(self):
+    super(Net, self).__init__()
+    # 1 input image channel, 6 output channels, 5x5 square convolution
+    # kernel
+    self.conv1 = nn.Conv2d(1, 6, 5)
+    self.conv2 = nn.Conv2d(6, 16, 5)
+    # an affine operation: y = Wx + b
+    self.fc1 = nn.Linear(16 * 5 * 5, 120)
+    self.fc2 = nn.Linear(120, 84)
+    self.fc3 = nn.Linear(84, 10)
 
-    def forward(self, x):
-        # Max pooling over a (2, 2) window
-        # downsampling
-        x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
-        # If the size is a square you can only specify a single number
-        x = F.max_pool2d(F.relu(self.conv2(x)), 2)
-        x = x.view(-1, self.num_flat_features(x))
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
 
-    def num_flat_features(self, x):
-        size = x.size()[1:]  # all dimensions except the batch dimension
-        num_features = 1
-        for s in size:
-            num_features *= s
-        return num_features
+  def forward(self, x):
+    # Max pooling over a (2, 2) window
+    x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
+    # If the size is a square you can only specify a single number
+    x = F.max_pool2d(F.relu(self.conv2(x)), 2)
+    x = x.view(-1, self.num_flat_features(x))
+    x = F.relu(self.fc1(x))
+    x = F.relu(self.fc2(x))
+    x = self.fc3(x)
+    return x
+
+  def num_flat_features(self, x):
+    # all dimensions except the batch dimension
+    size = x.size()[1:]      
+    num_features = 1
+    for s in size:
+      num_features *= s
+    return num_features
+
 
 
 net = Net()
@@ -91,11 +92,11 @@ print(len(params))
 print(params[0].size())  # conv1's .weight
 
 ########################################################################
-# The input to the forward is an ``autograd.Variable``, and so is the output.
+# Let try a random 32x32 input
 # Note: Expected input size to this net(LeNet) is 32x32. To use this net on
-# MNIST dataset,please resize the images from the dataset to 32x32.
+# MNIST dataset, please resize the images from the dataset to 32x32.
 
-input = Variable(torch.randn(1, 3, 32, 32))
+input = torch.randn(1, 1, 32, 32)
 out = net(input)
 print(out)
 
@@ -108,7 +109,7 @@ out.backward(torch.randn(1, 10))
 ########################################################################
 # .. note::
 #
-#     ``torch.nn`` only supports mini-batches The entire ``torch.nn``
+#     ``torch.nn`` only supports mini-batches. The entire ``torch.nn``
 #     package only supports inputs that are a mini-batch of samples, and not
 #     a single sample.
 #
@@ -121,25 +122,23 @@ out.backward(torch.randn(1, 10))
 # Before proceeding further, let's recap all the classes you’ve seen so far.
 #
 # **Recap:**
-#   -  ``torch.Tensor`` - A *multi-dimensional array*.
-#   -  ``autograd.Variable`` - *Wraps a Tensor and records the history of
-#      operations* applied to it. Has the same API as a ``Tensor``, with
-#      some additions like ``backward()``. Also *holds the gradient*
-#      w.r.t. the tensor.
+#   -  ``torch.Tensor`` - A *multi-dimensional array* with support for autograd
+#      operations like ``backward()``. Also *holds the gradient* w.r.t. the
+#      tensor.
 #   -  ``nn.Module`` - Neural network module. *Convenient way of
 #      encapsulating parameters*, with helpers for moving them to GPU,
 #      exporting, loading, etc.
-#   -  ``nn.Parameter`` - A kind of Variable, that is *automatically
+#   -  ``nn.Parameter`` - A kind of Tensor, that is *automatically
 #      registered as a parameter when assigned as an attribute to a*
 #      ``Module``.
 #   -  ``autograd.Function`` - Implements *forward and backward definitions
-#      of an autograd operation*. Every ``Variable`` operation, creates at
+#      of an autograd operation*. Every ``Tensor`` operation, creates at
 #      least a single ``Function`` node, that connects to functions that
-#      created a ``Variable`` and *encodes its history*.
+#      created a ``Tensor`` and *encodes its history*.
 #
 # **At this point, we covered:**
 #   -  Defining a neural network
-#   -  Processing inputs and calling backward.
+#   -  Processing inputs and calling backward
 #
 # **Still Left:**
 #   -  Computing the loss
@@ -159,14 +158,15 @@ out.backward(torch.randn(1, 10))
 # For example:
 
 output = net(input)
-target = Variable(torch.arange(1, 11))  # a dummy target, for example
+target = torch.arange(1, 11)  # a dummy target, for example
+target = target.view(1, -1)  # make it the same shape as output
 criterion = nn.MSELoss()
 
 loss = criterion(output, target)
 print(loss)
 
 ########################################################################
-# Now, if you follow ``loss`` in the backward direction, using it’s
+# Now, if you follow ``loss`` in the backward direction, using its
 # ``.grad_fn`` attribute, you will see a graph of computations that looks
 # like this:
 #
@@ -178,8 +178,8 @@ print(loss)
 #           -> loss
 #
 # So, when we call ``loss.backward()``, the whole graph is differentiated
-# w.r.t. the loss, and all Variables in the graph will have their
-# ``.grad`` Variable accumulated with the gradient.
+# w.r.t. the loss, and all Tensors in the graph that has ``requres_grad=True``
+# will have their ``.grad`` Tensor accumulated with the gradient.
 #
 # For illustration, let us follow a few steps backward:
 
@@ -190,9 +190,9 @@ print(loss.grad_fn.next_functions[0][0].next_functions[0][0])  # ReLU
 ########################################################################
 # Backprop
 # --------
-# To backpropogate the error all we have to do is to ``loss.backward()``.
+# To backpropagate the error all we have to do is to ``loss.backward()``.
 # You need to clear the existing gradients though, else gradients will be
-# accumulated to existing gradients
+# accumulated to existing gradients.
 #
 #
 # Now we shall call ``loss.backward()``, and have a look at conv1's bias
@@ -216,11 +216,11 @@ print(net.conv1.bias.grad)
 #
 #   The neural network package contains various modules and loss functions
 #   that form the building blocks of deep neural networks. A full list with
-#   documentation is `here <http://pytorch.org/docs/nn>`_
+#   documentation is `here <http://pytorch.org/docs/nn>`_.
 #
 # **The only thing left to learn is:**
 #
-#   - updating the weights of the network
+#   - Updating the weights of the network
 #
 # Update the weights
 # ------------------
@@ -245,7 +245,7 @@ print(net.conv1.bias.grad)
 import torch.optim as optim
 
 # create your optimizer
-optimizer = optim.SGD(net.parameters(), lr = 0.01)
+optimizer = optim.SGD(net.parameters(), lr=0.01)
 
 # in your training loop:
 optimizer.zero_grad()   # zero the gradient buffers
@@ -253,3 +253,11 @@ output = net(input)
 loss = criterion(output, target)
 loss.backward()
 optimizer.step()    # Does the update
+
+
+###############################################################
+# .. Note::
+#
+#       Observe how gradient buffers had to be manually set to zero using
+#       ``optimizer.zero_grad()``. This is because gradients are accumulated
+#       as explained in `Backprop`_ section.
